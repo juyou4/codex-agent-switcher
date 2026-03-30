@@ -36,6 +36,9 @@ function CopyButton({ text, label = '复制名称', title = '复制名称' }) {
 export default function AgentCard({ agent, isActive, onActivate, onEdit, onDelete, onReset }) {
   const [activating, setActivating] = useState(false)
   const [expanded, setExpanded] = useState(false)
+  const modelSummary = [agent.effective_model_provider || agent.model_provider, agent.effective_model || agent.model]
+    .filter(Boolean)
+    .join(' · ')
 
   const handleActivate = async (e) => {
     e.stopPropagation()
@@ -114,9 +117,9 @@ export default function AgentCard({ agent, isActive, onActivate, onEdit, onDelet
               </span>
             )}
           </div>
-          {agent.model && (
+          {modelSummary && (
             <p className="text-apple-caption !text-[13px] font-mono opacity-60 truncate">
-              {agent.model_provider ? `${agent.model_provider} · ` : ''}{agent.model}
+              {modelSummary}
             </p>
           )}
         </div>

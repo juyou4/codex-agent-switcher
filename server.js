@@ -1,4 +1,5 @@
 require('dotenv').config();
+const { exec } = require('child_process');
 const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
@@ -8,6 +9,7 @@ const TOML = require('@iarna/toml');
 
 const app = express();
 const PORT = process.env.PORT || 3737;
+const APP_URL = process.env.APP_URL || `http://localhost:${PORT}`;
 
 // Codex 配置目录（支持 CODEX_DIR env var 覆盖，跨平台）
 const CODEX_DIR = process.env.CODEX_DIR
@@ -115,6 +117,29 @@ function toDisplayPath(targetPath) {
   return targetPath.replace(/\\/g, '/');
 }
 
+function shouldAutoOpenBrowser() {
+  return fs.existsSync(DIST_DIR) && process.env.AUTO_OPEN_BROWSER !== 'false';
+}
+
+function openBrowser(url) {
+  const escapedUrl = `"${url}"`;
+  let command = null;
+
+  if (process.platform === 'win32') {
+    command = `start "" ${escapedUrl}`;
+  } else if (process.platform === 'darwin') {
+    command = `open ${escapedUrl}`;
+  } else {
+    command = `xdg-open ${escapedUrl}`;
+  }
+
+  exec(command, (err) => {
+    if (err) {
+      console.warn(`Failed to open browser automatically: ${err.message}`);
+    }
+  });
+}
+
 function ensureAgentsDir() {
   ensureCodexDir();
   if (!fs.existsSync(AGENTS_DIR)) {
@@ -178,6 +203,14 @@ function cleanConfigValue(value) {
     return Object.keys(cleaned).length > 0 ? cleaned : undefined;
   }
   return value;
+}
+
+function pickNonBlankValue(...values) {
+  for (const value of values) {
+    const cleaned = cleanConfigValue(value);
+    if (cleaned !== undefined) return cleaned;
+  }
+  return undefined;
 }
 
 function setOptionalConfigValue(target, key, value) {
@@ -319,26 +352,49 @@ function mergeAgentData(baseAgent, body) {
   return data;
 }
 
+// 为展示层补齐 agent 实际生效的模型配置：优先 agent，自身没有时回退到全局 config.toml
+function withEffectiveAgentConfig(agent, globalConfig = {}) {
+  const hasAgentModel = pickNonBlankValue(agent.model) !== undefined;
+  const hasAgentModelProvider = pickNonBlankValue(agent.model_provider) !== undefined;
+  const effectiveModel = pickNonBlankValue(agent.model, globalConfig.model);
+  const effectiveModelProvider = pickNonBlankValue(agent.model_provider, globalConfig.model_provider);
+
+  return {
+    ...agent,
+    effective_model: effectiveModel ?? null,
+    effective_model_provider: effectiveModelProvider ?? null,
+    effective_model_source: hasAgentModel ? 'agent' : effectiveModel ? 'global' : null,
+    effective_model_provider_source: hasAgentModelProvider ? 'agent' : effectiveModelProvider ? 'global' : null,
+  };
+}
+
 // GET /api/agents — 返回内置 + 自定义 agents；?project=<dir> 追加项目级 agents
 app.get('/api/agents', (req, res) => {
+  const config = readConfig();
   const custom = loadCustomAgents();
   const customByName = new Map(custom.map((agent) => [agent.name, agent]));
   const builtins = BUILTIN_AGENTS.map((builtin) => {
     const override = customByName.get(builtin.name);
-    if (!override) return { ...builtin, overridden: false };
+    if (!override) return withEffectiveAgentConfig({ ...builtin, overridden: false }, config);
     return {
-      ...builtin,
-      ...override,
-      builtin: true,
-      overridden: true,
-      icon: builtin.icon,
-      color: builtin.color,
+      ...withEffectiveAgentConfig({
+        ...builtin,
+        ...override,
+        builtin: true,
+        overridden: true,
+        icon: builtin.icon,
+        color: builtin.color,
+      }, config),
     };
   });
-  const customVisible = custom.filter((agent) => !BUILTIN_AGENT_NAMES.has(agent.name));
+  const customVisible = custom
+    .filter((agent) => !BUILTIN_AGENT_NAMES.has(agent.name))
+    .map((agent) => withEffectiveAgentConfig(agent, config));
   let project = [];
   if (req.query.project) {
-    try { project = loadProjectAgents(req.query.project); } catch {}
+    try {
+      project = loadProjectAgents(req.query.project).map((agent) => withEffectiveAgentConfig(agent, config));
+    } catch {}
   }
   res.json({ builtin: builtins, custom: customVisible, project });
 });
@@ -510,10 +566,14 @@ if (fs.existsSync(DIST_DIR)) {
 }
 
 app.listen(PORT, () => {
-  console.log(`Codex Agent Switcher running at http://localhost:${PORT}`);
+  console.log(`Codex Agent Switcher running at ${APP_URL}`);
   console.log(`Codex config dir: ${CODEX_DIR}`);
   if (fs.existsSync(DIST_DIR)) {
     console.log('Mode: production (serving built frontend)');
+    if (shouldAutoOpenBrowser()) {
+      console.log(`Opening browser at ${APP_URL}`);
+      openBrowser(APP_URL);
+    }
   } else {
     console.log('Mode: development (frontend served by Vite on :5173)');
   }
