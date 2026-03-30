@@ -1,0 +1,173 @@
+import React, { useState, useEffect } from 'react'
+
+export default function GlobalSettings({ onClose }) {
+  const [form, setForm] = useState({ max_threads: '', max_depth: '', job_max_runtime_seconds: '' })
+  const [info, setInfo] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/config/agents').then(r => r.json()),
+      fetch('/api/info').then(r => r.json()),
+    ]).then(([agentsCfg, serverInfo]) => {
+      setForm({
+        max_threads: agentsCfg.max_threads ?? '',
+        max_depth: agentsCfg.max_depth ?? '',
+        job_max_runtime_seconds: agentsCfg.job_max_runtime_seconds ?? '',
+      })
+      setInfo(serverInfo)
+    }).catch(() => setError('加载配置失败'))
+  }, [])
+
+  const handleChange = (field, value) => {
+    setForm(prev => ({ ...prev, [field]: value }))
+    setSaved(false)
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    setError('')
+    try {
+      const res = await fetch('/api/config/agents', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || '保存失败')
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const inputCls = 'w-full px-4 py-3 rounded-2xl bg-[hsl(var(--muted))/0.5] dark:bg-white/8 border border-[hsl(var(--border))] dark:border-white/15 text-[13px] text-[hsl(var(--foreground))] placeholder-[hsl(var(--muted-foreground))/0.5] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--accent))/0.3] focus:border-[hsl(var(--accent))] transition-all duration-300 font-mono'
+  const labelCls = 'block text-[11px] font-bold text-[hsl(var(--muted-foreground))] dark:text-white/60 mb-2 ml-1 uppercase tracking-widest'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 animate-apple-fade-in">
+      <div className="w-full max-w-md animate-apple-scale-in glass-modal shadow-2xl">
+        <div className="relative">
+
+          {/* Header */}
+          <div className="px-8 pt-8 pb-6 border-b border-[hsl(var(--border))] dark:border-white/10">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[hsl(var(--accent))] to-indigo-600 flex items-center justify-center text-xl shadow-xl shadow-blue-500/30 ring-4 ring-[hsl(var(--accent))/0.1]">⚙️</div>
+                <div>
+                  <h2 className="text-apple-title text-base">全局配置</h2>
+                  <p className="text-apple-caption mt-0.5 opacity-60">config.toml · [agents]</p>
+                </div>
+              </div>
+              <button onClick={onClose} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] transition-all duration-300 active:scale-90">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div className="px-8 py-6 space-y-6">
+            {/* 服务器信息卡片 */}
+            {info && (
+              <div className="p-4 rounded-2xl text-[11px] space-y-2 animate-apple-fade-in bg-[hsl(var(--muted))/0.6] dark:bg-white/6 border border-[hsl(var(--border))] dark:border-white/10">
+                <div className="flex items-center justify-between">
+                  <span className="text-[hsl(var(--muted-foreground))] font-bold uppercase tracking-widest text-[10px]">配置目录</span>
+                  <code className="text-[hsl(var(--foreground))] font-mono opacity-70 text-[11px] max-w-[200px] truncate">{info.codexDir}</code>
+                </div>
+                <div className="h-px bg-[hsl(var(--border))]" />
+                <div className="flex items-center justify-between">
+                  <span className="text-[hsl(var(--muted-foreground))] font-bold uppercase tracking-widest text-[10px]">系统平台</span>
+                  <code className="text-[hsl(var(--foreground))] font-mono opacity-70 text-[11px]">{info.platform}</code>
+                </div>
+              </div>
+            )}
+
+            {/* max_threads */}
+            <div className="animate-apple-fade-in [animation-delay:0.05s]">
+              <label className={labelCls}>
+                max_threads
+                <span className="ml-2 font-normal opacity-50 normal-case">（默认 6）</span>
+              </label>
+              <input type="number" min="1" max="32" value={form.max_threads}
+                onChange={e => handleChange('max_threads', e.target.value)}
+                placeholder="6"
+                className={inputCls} />
+              <p className="text-[10px] text-[hsl(var(--muted-foreground))] mt-2 ml-1 opacity-70 font-medium">最大并行线程数</p>
+            </div>
+
+            {/* max_depth */}
+            <div className="animate-apple-fade-in [animation-delay:0.1s]">
+              <label className={labelCls}>
+                max_depth
+                <span className="ml-2 font-normal opacity-50 normal-case">（默认 1）</span>
+              </label>
+              <input type="number" min="0" max="5" value={form.max_depth}
+                onChange={e => handleChange('max_depth', e.target.value)}
+                placeholder="1"
+                className={inputCls} />
+              <p className="text-[10px] text-[hsl(var(--muted-foreground))] mt-2 ml-1 opacity-70 font-medium">子代理嵌套深度上限</p>
+            </div>
+
+            {/* job_max_runtime_seconds */}
+            <div className="animate-apple-fade-in [animation-delay:0.15s]">
+              <label className={labelCls}>
+                job_max_runtime_seconds
+                <span className="ml-2 font-normal opacity-50 normal-case">（单位：秒）</span>
+              </label>
+              <input type="number" min="60" value={form.job_max_runtime_seconds}
+                onChange={e => handleChange('job_max_runtime_seconds', e.target.value)}
+                placeholder="1800"
+                className={inputCls} />
+              <p className="text-[10px] text-[hsl(var(--muted-foreground))] mt-2 ml-1 opacity-70 font-medium">批处理任务单次超时限制</p>
+            </div>
+
+            {error && (
+              <div className="flex items-center gap-3 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 text-[12px] font-bold animate-apple-fade-in">
+                <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {error}
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="flex items-center justify-between px-8 py-5 border-t border-[hsl(var(--border))] dark:border-white/10 bg-[hsl(var(--muted))/0.3] dark:bg-white/3">
+            <p className="text-[10px] text-[hsl(var(--muted-foreground))] opacity-50 font-mono">
+              ~/.codex/config.toml
+            </p>
+            <div className="flex items-center gap-3">
+              <button type="button" onClick={onClose}
+                className="glass-button !px-6 !h-11 !border-none !shadow-none hover:bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] font-bold text-xs uppercase tracking-widest active:scale-95 transition-all duration-300">
+                取消
+              </button>
+              <button onClick={handleSave} disabled={saving}
+                className="glass-button-primary !px-8 !h-11 shadow-xl shadow-blue-500/25">
+                {saving ? (
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                ) : saved ? (
+                  <div className="flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span className="font-bold text-xs uppercase tracking-widest">已保存</span>
+                  </div>
+                ) : <span className="font-bold text-xs uppercase tracking-widest">保存</span>}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
