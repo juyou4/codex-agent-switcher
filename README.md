@@ -157,12 +157,6 @@ url = "https://example.com/mcp"
 - Backend: Node.js + Express + [@iarna/toml](https://github.com/iarna/iarna-toml)
 - Frontend: React 18 + Vite + Tailwind CSS
 
-## Repository Description
-
-如果你要把这个项目发布到 GitHub，仓库描述可以直接用：
-
-`Local web UI for managing, editing, and switching Codex CLI agent configs.`
-
 ## License
 
 MIT
