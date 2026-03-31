@@ -63,8 +63,8 @@ Codex Subagent Manager 的目标就是把这些操作变成一个本地页面，
 ### Install
 
 ```bash
-git clone https://github.com/juyou4/codex-agent-switcher.git
-cd codex-agent-switcher
+git clone https://github.com/juyou4/Codex-Subagent-Manager.git
+cd Codex-Subagent-Manager
 npm run setup
 ```
 
