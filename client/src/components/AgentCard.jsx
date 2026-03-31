@@ -33,36 +33,19 @@ function CopyButton({ text, label = '复制名称', title = '复制名称' }) {
   )
 }
 
-export default function AgentCard({ agent, isActive, onActivate, onEdit, onDelete, onReset }) {
-  const [activating, setActivating] = useState(false)
+export default function AgentCard({ agent, onEdit, onDelete, onReset }) {
   const [expanded, setExpanded] = useState(false)
   const modelSummary = [agent.effective_model_provider || agent.model_provider, agent.effective_model || agent.model]
     .filter(Boolean)
     .join(' · ')
-
-  const handleActivate = async (e) => {
-    e.stopPropagation()
-    setActivating(true)
-    await onActivate(agent.name)
-    setActivating(false)
-  }
 
   return (
     <div
       className={`
         glass-card relative flex flex-col gap-8 animate-apple-fade-in group
         hover:scale-[1.01] hover:shadow-2xl transition-all duration-500
-        ${isActive ? 'card-active' : ''}
       `}
     >
-      {/* Active badge */}
-      {isActive && (
-        <div className="absolute -top-3 left-8 flex items-center gap-2 px-4 py-1.5 rounded-full bg-[hsl(var(--accent))] text-white text-[11px] font-bold shadow-lg shadow-blue-500/25 ring-4 ring-[hsl(var(--background))] transition-all duration-500 animate-apple-scale-in">
-          <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-          正在使用
-        </div>
-      )}
-
       {/* Actions - 绝对定位在卡片右上角 */}
       <div className="absolute top-6 right-6 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10">
         <button
@@ -155,26 +138,9 @@ export default function AgentCard({ agent, isActive, onActivate, onEdit, onDelet
       {/* Footer */}
       <div className="flex items-center justify-between mt-auto pt-6 border-t border-[hsl(var(--border))]">
         <CopyButton text={agent.name} />
-        <button
-          onClick={handleActivate}
-          disabled={activating || isActive}
-          className={`
-            ${isActive ? 'glass-button !border-transparent !bg-[hsl(var(--muted))/0.5] !text-[hsl(var(--muted-foreground))]' : 'glass-button-primary'}
-            !px-8 !h-11 transition-all duration-500 disabled:opacity-50 disabled:cursor-default active:scale-95 shadow-lg
-          `}
-        >
-          {activating ? (
-            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-          ) : (
-            <svg className="w-4 h-4 transition-transform group-hover:translate-x-0.5 duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={isActive ? "M5 13l4 4L19 7" : "M13 5l7 7-7 7M5 12h15"} />
-            </svg>
-          )}
-          <span className="text-xs font-bold tracking-tight">{isActive ? '已应用' : '应用配置'}</span>
-        </button>
+        <div className="text-[11px] text-[hsl(var(--muted-foreground))] font-medium">
+          供子代理引用
+        </div>
       </div>
     </div>
   )

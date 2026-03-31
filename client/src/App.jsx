@@ -8,7 +8,6 @@ export default function App() {
   const [builtinAgents, setBuiltinAgents] = useState([])
   const [customAgents, setCustomAgents] = useState([])
   const [projectAgents, setProjectAgents] = useState([])
-  const [activeAgent, setActiveAgent] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [editorOpen, setEditorOpen] = useState(false)
@@ -18,6 +17,7 @@ export default function App() {
   const [projectPath, setProjectPath] = useState('')
   const [projectPathInput, setProjectPathInput] = useState('')
   const [codexDir, setCodexDir] = useState('~/.codex')
+  const [defaultModelSummary, setDefaultModelSummary] = useState('')
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type })
@@ -50,7 +50,7 @@ export default function App() {
         ...a,
         icon: '📁',
       })))
-      setActiveAgent(configData.activeAgent)
+      setDefaultModelSummary([configData.model_provider, configData.model].filter(Boolean).join(' · '))
       if (infoRes.ok) {
         const infoData = await infoRes.json()
         setCodexDir(infoData.codexDirDisplay || infoData.codexDir || '~/.codex')
@@ -63,22 +63,6 @@ export default function App() {
   }, [projectPath])
 
   useEffect(() => { fetchAll() }, [fetchAll])
-
-  const handleActivate = async (name) => {
-    try {
-      const res = await fetch('/api/activate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ agent: name }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
-      setActiveAgent(name === 'default' ? null : name)
-      showToast(`已激活 ${name}`)
-    } catch (err) {
-      showToast(err.message, 'error')
-    }
-  }
 
   const handleDelete = async (name) => {
     if (!confirm(`确定要删除代理「${name}」吗？此操作不可恢复。`)) return
@@ -130,8 +114,6 @@ export default function App() {
 
   const cardProps = (agent) => ({
     agent,
-    isActive: activeAgent === agent.name || (agent.name === 'default' && !activeAgent),
-    onActivate: handleActivate,
     onEdit: handleEdit,
     onDelete: handleDelete,
     onReset: handleReset,
@@ -165,7 +147,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[hsl(var(--background))] selection:bg-[hsl(var(--accent))/0.3]">
       <Header
-        activeAgent={activeAgent}
+        defaultModelSummary={defaultModelSummary}
         onRefresh={() => fetchAll()}
         loading={loading}
         onSettings={() => setSettingsOpen(true)}
@@ -190,7 +172,7 @@ export default function App() {
             <div className="flex items-end justify-between mb-10 border-b border-[hsl(var(--border))] pb-6">
               <div className="space-y-1">
                 <h2 className="text-apple-headline tracking-tight">内置代理</h2>
-                <p className="text-apple-caption">OpenAI 预设的核心能力</p>
+                <p className="text-apple-caption">OpenAI 预设的子代理能力，不直接切换当前主会话模型</p>
               </div>
               <span className="text-apple-caption font-medium px-3 py-1 rounded-full bg-[hsl(var(--muted))] border border-[hsl(var(--border))]">
                 3 个可用
@@ -214,7 +196,7 @@ export default function App() {
             <div className="flex items-end justify-between mb-10 border-b border-[hsl(var(--border))] pb-6">
               <div className="space-y-1">
                 <h2 className="text-apple-headline tracking-tight text-[hsl(var(--foreground))]">个人库</h2>
-                <p className="text-apple-caption">保存在 {codexDir}/agents/</p>
+                <p className="text-apple-caption">保存在 {codexDir}/agents/，供子代理调用</p>
               </div>
               <button onClick={() => { setEditingAgent(null); setEditorOpen(true) }}
                 className="glass-button-primary !px-5 !h-11 text-xs shadow-xl shadow-blue-500/20 group transition-all duration-300 active:scale-95">
@@ -252,7 +234,7 @@ export default function App() {
             <div className="flex items-end justify-between mb-10 border-b border-[hsl(var(--border))] pb-6">
               <div className="space-y-1">
                 <h2 className="text-apple-headline tracking-tight">项目范围</h2>
-                <p className="text-apple-caption">从特定工作区加载代理</p>
+                <p className="text-apple-caption">从特定工作区加载子代理配置</p>
               </div>
             </div>
 
@@ -331,8 +313,9 @@ export default function App() {
               <div className="space-y-2">
                 <p className="text-apple-title text-sm">使用指南</p>
                 <p className="text-apple-caption text-[12px] leading-relaxed max-w-2xl">
-                  激活操作将安全地修改 <code className="font-mono text-[hsl(var(--foreground))] font-bold">{codexDir}/config.toml</code> 中的 <code className="font-mono">agent</code> 字段。
-                  选择 <strong className="text-[hsl(var(--foreground))] text-[hsl(var(--accent))]">default</strong> 会移除该字段，使 Codex 回到全局默认状态。
+                  这里管理的是 <code className="font-mono text-[hsl(var(--foreground))] font-bold">{codexDir}/agents/</code> 下的子代理配置。
+                  主会话默认模型请在右上角的“全局配置”中修改 <code className="font-mono">config.toml</code> 顶层的 <code className="font-mono">model</code>、<code className="font-mono">model_provider</code> 和 <code className="font-mono">model_reasoning_effort</code>。
+                  这些修改通常只对新开的 Codex 会话生效，不会热更新当前已经运行中的桌面 app 对话。
                   复制按钮会复制 agent 名称，方便在提示词中引用；如需在 Codex 会话中查看或切换运行中的子代理，请使用 <code className="font-mono bg-[hsl(var(--background))] px-2 py-1 rounded border border-[hsl(var(--border))] text-[hsl(var(--accent))] font-bold ml-1">/agent</code>。
                 </p>
               </div>

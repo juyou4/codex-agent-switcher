@@ -1,22 +1,35 @@
 import React, { useState, useEffect } from 'react'
 
 export default function GlobalSettings({ onClose }) {
-  const [form, setForm] = useState({ max_threads: '', max_depth: '', job_max_runtime_seconds: '' })
+  const [form, setForm] = useState({
+    model: '',
+    model_provider: '',
+    model_reasoning_effort: '',
+    max_threads: '',
+    max_depth: '',
+    job_max_runtime_seconds: '',
+  })
   const [info, setInfo] = useState(null)
+  const [legacyAgent, setLegacyAgent] = useState(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
     Promise.all([
+      fetch('/api/config').then(r => r.json()),
       fetch('/api/config/agents').then(r => r.json()),
       fetch('/api/info').then(r => r.json()),
-    ]).then(([agentsCfg, serverInfo]) => {
+    ]).then(([configData, agentsCfg, serverInfo]) => {
       setForm({
+        model: configData.model ?? '',
+        model_provider: configData.model_provider ?? '',
+        model_reasoning_effort: configData.model_reasoning_effort ?? '',
         max_threads: agentsCfg.max_threads ?? '',
         max_depth: agentsCfg.max_depth ?? '',
         job_max_runtime_seconds: agentsCfg.job_max_runtime_seconds ?? '',
       })
+      setLegacyAgent(configData.legacyAgent ?? null)
       setInfo(serverInfo)
     }).catch(() => setError('加载配置失败'))
   }, [])
@@ -30,13 +43,30 @@ export default function GlobalSettings({ onClose }) {
     setSaving(true)
     setError('')
     try {
-      const res = await fetch('/api/config/agents', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || '保存失败')
+      const [modelRes, agentsRes] = await Promise.all([
+        fetch('/api/config/default-model', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: form.model,
+            model_provider: form.model_provider,
+            model_reasoning_effort: form.model_reasoning_effort,
+          }),
+        }),
+        fetch('/api/config/agents', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            max_threads: form.max_threads,
+            max_depth: form.max_depth,
+            job_max_runtime_seconds: form.job_max_runtime_seconds,
+          }),
+        }),
+      ])
+      const modelData = await modelRes.json()
+      const agentsData = await agentsRes.json()
+      if (!modelRes.ok) throw new Error(modelData.error || '保存默认模型失败')
+      if (!agentsRes.ok) throw new Error(agentsData.error || '保存 agents 配置失败')
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } catch (err) {
@@ -53,7 +83,7 @@ export default function GlobalSettings({ onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 animate-apple-fade-in">
-      <div className="w-full max-w-md animate-apple-scale-in glass-modal shadow-2xl">
+      <div className="w-full max-w-xl animate-apple-scale-in glass-modal shadow-2xl">
         <div className="relative">
 
           {/* Header */}
@@ -63,7 +93,7 @@ export default function GlobalSettings({ onClose }) {
                 <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[hsl(var(--accent))] to-indigo-600 flex items-center justify-center text-xl shadow-xl shadow-blue-500/30 ring-4 ring-[hsl(var(--accent))/0.1]">⚙️</div>
                 <div>
                   <h2 className="text-apple-title text-base">全局配置</h2>
-                  <p className="text-apple-caption mt-0.5 opacity-60">config.toml · [agents]</p>
+                  <p className="text-apple-caption mt-0.5 opacity-60">config.toml · default model + [agents]</p>
                 </div>
               </div>
               <button onClick={onClose} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] transition-all duration-300 active:scale-90">
@@ -89,6 +119,63 @@ export default function GlobalSettings({ onClose }) {
                 </div>
               </div>
             )}
+
+            {legacyAgent && (
+              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 text-[11px] leading-relaxed">
+                检测到旧的 <code className="font-mono">agent = "{legacyAgent}"</code> 字段。
+                子代理配置不会直接切换当前主会话模型；主会话默认模型请以下面的 <code className="font-mono">model</code> 设置为准。
+              </div>
+            )}
+
+            <div className="space-y-5 animate-apple-fade-in [animation-delay:0.03s]">
+              <div>
+                <p className="text-apple-title text-sm">新会话默认模型</p>
+                <p className="text-[11px] text-[hsl(var(--muted-foreground))] mt-1 leading-relaxed">
+                  这里写入 <code className="font-mono">config.toml</code> 顶层字段，通常只对新开的 Codex 会话生效。
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                  <label className={labelCls}>model</label>
+                  <input
+                    type="text"
+                    value={form.model}
+                    onChange={e => handleChange('model', e.target.value)}
+                    placeholder="gpt-5.4"
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>model_provider</label>
+                  <input
+                    type="text"
+                    value={form.model_provider}
+                    onChange={e => handleChange('model_provider', e.target.value)}
+                    placeholder="留空继承登录态/默认 provider"
+                    className={inputCls}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className={labelCls}>model_reasoning_effort</label>
+                <input
+                  type="text"
+                  value={form.model_reasoning_effort}
+                  onChange={e => handleChange('model_reasoning_effort', e.target.value)}
+                  placeholder="minimal / low / medium / high / xhigh"
+                  className={inputCls}
+                />
+              </div>
+            </div>
+
+            <div className="h-px bg-[hsl(var(--border))]" />
+
+            <div className="space-y-1">
+              <p className="text-apple-title text-sm">Agents 并发设置</p>
+              <p className="text-[11px] text-[hsl(var(--muted-foreground))]">这些字段写入 <code className="font-mono">[agents]</code>。</p>
+            </div>
 
             {/* max_threads */}
             <div className="animate-apple-fade-in [animation-delay:0.05s]">

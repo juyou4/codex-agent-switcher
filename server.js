@@ -404,8 +404,10 @@ app.get('/api/config', (req, res) => {
   const config = readConfig();
   res.json({
     activeAgent: config.agent || null,
+    legacyAgent: config.agent || null,
     model: config.model || null,
     model_provider: config.model_provider || null,
+    model_reasoning_effort: config.model_reasoning_effort || null,
     raw: config,
   });
 });
@@ -424,6 +426,28 @@ app.post('/api/activate', (req, res) => {
   try {
     writeConfig(config);
     res.json({ ok: true, activeAgent: agent });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/config/default-model — 更新全局默认模型配置（作用于新会话）
+app.put('/api/config/default-model', (req, res) => {
+  const { model, model_provider, model_reasoning_effort } = req.body;
+  const config = readConfig();
+
+  setOptionalConfigValue(config, 'model', model);
+  setOptionalConfigValue(config, 'model_provider', model_provider);
+  setOptionalConfigValue(config, 'model_reasoning_effort', model_reasoning_effort);
+
+  try {
+    writeConfig(config);
+    res.json({
+      ok: true,
+      model: config.model || null,
+      model_provider: config.model_provider || null,
+      model_reasoning_effort: config.model_reasoning_effort || null,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

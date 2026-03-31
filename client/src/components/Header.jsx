@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 
-export default function Header({ activeAgent, onRefresh, loading, onSettings, codexDir = '~/.codex' }) {
+export default function Header({ defaultModelSummary, onRefresh, loading, onSettings, codexDir = '~/.codex' }) {
   const [isDark, setIsDark] = useState(document.documentElement.classList.contains('dark'))
 
   useEffect(() => {
@@ -35,17 +35,20 @@ export default function Header({ activeAgent, onRefresh, loading, onSettings, co
 
           {/* Right */}
           <div className="flex items-center gap-3">
-            {activeAgent ? (
+            {defaultModelSummary ? (
               <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[hsl(var(--accent))/0.1] border border-[hsl(var(--accent))/0.2] animate-apple-fade-in">
-                <span className="w-1.5 h-1.5 rounded-full bg-[hsl(var(--accent))] animate-pulse" />
+                <span className="w-1.5 h-1.5 rounded-full bg-[hsl(var(--accent))]" />
                 <span className="text-[11px] font-semibold text-[hsl(var(--accent))]">
-                  {activeAgent}
+                  新会话默认模型
+                </span>
+                <span className="text-[11px] font-mono text-[hsl(var(--foreground))] opacity-80">
+                  {defaultModelSummary}
                 </span>
               </div>
             ) : (
               <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[hsl(var(--muted))] border border-[hsl(var(--border))] opacity-60">
                 <span className="w-1.5 h-1.5 rounded-full bg-[hsl(var(--muted-foreground))]" />
-                <span className="text-[11px] font-medium">默认模式</span>
+                <span className="text-[11px] font-medium">新会话模型未显式设置</span>
               </div>
             )}
 
@@ -95,5 +98,4 @@ export default function Header({ activeAgent, onRefresh, loading, onSettings, co
     </header>
   )
 }
-
 
