@@ -12,6 +12,7 @@ export default function GlobalSettings({ onClose }) {
   const [info, setInfo] = useState(null)
   const [legacyAgent, setLegacyAgent] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [removingLegacyAgent, setRemovingLegacyAgent] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
 
@@ -76,6 +77,21 @@ export default function GlobalSettings({ onClose }) {
     }
   }
 
+  const handleRemoveLegacyAgent = async () => {
+    setRemovingLegacyAgent(true)
+    setError('')
+    try {
+      const res = await fetch('/api/config/legacy-agent', { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || '移除旧 agent 字段失败')
+      setLegacyAgent(null)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setRemovingLegacyAgent(false)
+    }
+  }
+
   const inputCls = 'w-full px-4 py-3 rounded-2xl bg-[hsl(var(--muted))/0.5] dark:bg-white/8 border border-[hsl(var(--border))] dark:border-white/15 text-[13px] text-[hsl(var(--foreground))] placeholder-[hsl(var(--muted-foreground))/0.5] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--accent))/0.3] focus:border-[hsl(var(--accent))] transition-all duration-300 font-mono'
   const labelCls = 'block text-[11px] font-bold text-[hsl(var(--muted-foreground))] dark:text-white/60 mb-2 ml-1 uppercase tracking-widest'
   const codexDirDisplay = info?.codexDirDisplay || info?.codexDir || '~/.codex'
@@ -121,9 +137,19 @@ export default function GlobalSettings({ onClose }) {
             )}
 
             {legacyAgent && (
-              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 text-[11px] leading-relaxed">
-                检测到旧的 <code className="font-mono">agent = "{legacyAgent}"</code> 字段。
-                这个字段不会可靠切换当前主会话预设，建议手动删除它，主会话默认模型请以下面的 <code className="font-mono">model</code> 设置为准。
+              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 text-[11px] leading-relaxed space-y-3">
+                <p>
+                  检测到旧的 <code className="font-mono">agent = "{legacyAgent}"</code> 字段。
+                  这个字段不会可靠切换当前主会话预设，主会话默认模型请以下面的 <code className="font-mono">model</code> 设置为准。
+                </p>
+                <button
+                  type="button"
+                  onClick={handleRemoveLegacyAgent}
+                  disabled={removingLegacyAgent}
+                  className="inline-flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] font-bold text-amber-700 transition-all hover:bg-amber-500/15 disabled:opacity-60 dark:text-amber-300"
+                >
+                  {removingLegacyAgent ? '正在移除…' : '一键移除旧 agent 字段'}
+                </button>
               </div>
             )}
 

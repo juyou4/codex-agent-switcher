@@ -139,7 +139,7 @@ export default function AgentCard({ agent, onEdit, onDelete, onReset }) {
       <div className="flex items-center justify-between mt-auto pt-6 border-t border-[hsl(var(--border))]">
         <CopyButton text={agent.name} />
         <div className="text-[11px] text-[hsl(var(--muted-foreground))] font-medium">
-          供子代理引用
+          供启用子代理时引用
         </div>
       </div>
     </div>

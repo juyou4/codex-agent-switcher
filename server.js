@@ -433,6 +433,20 @@ app.put('/api/config/default-model', (req, res) => {
   }
 });
 
+// DELETE /api/config/legacy-agent — 移除旧的顶层 agent 字段，避免误导为主会话预设切换
+app.delete('/api/config/legacy-agent', (req, res) => {
+  const config = readConfig();
+  const removed = config.agent ?? null;
+  delete config.agent;
+
+  try {
+    writeConfig(config);
+    res.json({ ok: true, removed });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/agents — 创建新自定义 agent（支持全字段）
 app.post('/api/agents', (req, res) => {
   const { name, description, developer_instructions } = req.body;

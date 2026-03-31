@@ -166,13 +166,13 @@ export default function App() {
           </div>
         )}
 
-        {/* 内置 Agents */}
+        {/* 内置 Subagents */}
         <section className="bg-[hsl(var(--background))] pt-12 pb-16">
           <div className="max-w-[1200px] mx-auto px-6">
             <div className="flex items-end justify-between mb-10 border-b border-[hsl(var(--border))] pb-6">
               <div className="space-y-1">
-                <h2 className="text-apple-headline tracking-tight">内置代理</h2>
-                <p className="text-apple-caption">OpenAI 预设的子代理能力，不直接切换当前主会话模型</p>
+                <h2 className="text-apple-headline tracking-tight">内置子代理预设</h2>
+                <p className="text-apple-caption">用于新会话里启用子代理时选择 `default` / `worker` / `explorer`</p>
               </div>
               <span className="text-apple-caption font-medium px-3 py-1 rounded-full bg-[hsl(var(--muted))] border border-[hsl(var(--border))]">
                 3 个可用
@@ -196,7 +196,7 @@ export default function App() {
             <div className="flex items-end justify-between mb-10 border-b border-[hsl(var(--border))] pb-6">
               <div className="space-y-1">
                 <h2 className="text-apple-headline tracking-tight text-[hsl(var(--foreground))]">个人库</h2>
-                <p className="text-apple-caption">保存在 {codexDir}/agents/，供子代理调用</p>
+                <p className="text-apple-caption">保存在 {codexDir}/agents/，供会话里启用子代理时调用</p>
               </div>
               <button onClick={() => { setEditingAgent(null); setEditorOpen(true) }}
                 className="glass-button-primary !px-5 !h-11 text-xs shadow-xl shadow-blue-500/20 group transition-all duration-300 active:scale-95">
@@ -316,7 +316,7 @@ export default function App() {
                   这里管理的是 <code className="font-mono text-[hsl(var(--foreground))] font-bold">{codexDir}/agents/</code> 下的子代理配置。
                   主会话默认模型请在右上角的“全局配置”中修改 <code className="font-mono">config.toml</code> 顶层的 <code className="font-mono">model</code>、<code className="font-mono">model_provider</code> 和 <code className="font-mono">model_reasoning_effort</code>。
                   这些修改通常只对新开的 Codex 会话生效，不会热更新当前已经运行中的桌面 app 对话。
-                  复制按钮会复制 agent 名称，方便在提示词中引用；如需在 Codex 会话中查看或切换运行中的子代理，请使用 <code className="font-mono bg-[hsl(var(--background))] px-2 py-1 rounded border border-[hsl(var(--border))] text-[hsl(var(--accent))] font-bold ml-1">/agent</code>。
+                  复制按钮会复制 agent 名称，方便在新会话里启用子代理时引用；如需在 Codex 会话中查看或切换运行中的子代理，请使用 <code className="font-mono bg-[hsl(var(--background))] px-2 py-1 rounded border border-[hsl(var(--border))] text-[hsl(var(--accent))] font-bold ml-1">/agent</code>。
                 </p>
               </div>
             </div>
