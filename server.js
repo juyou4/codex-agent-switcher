@@ -403,32 +403,12 @@ app.get('/api/agents', (req, res) => {
 app.get('/api/config', (req, res) => {
   const config = readConfig();
   res.json({
-    activeAgent: config.agent || null,
     legacyAgent: config.agent || null,
     model: config.model || null,
     model_provider: config.model_provider || null,
     model_reasoning_effort: config.model_reasoning_effort || null,
     raw: config,
   });
-});
-
-// POST /api/activate — 激活指定 agent
-app.post('/api/activate', (req, res) => {
-  const { agent } = req.body;
-  if (!agent) return res.status(400).json({ error: 'agent name required' });
-  const config = readConfig();
-  if (agent === 'default') {
-    // default agent: 删除 agent 字段（Codex 默认就是 default）
-    delete config.agent;
-  } else {
-    config.agent = agent;
-  }
-  try {
-    writeConfig(config);
-    res.json({ ok: true, activeAgent: agent });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
 });
 
 // PUT /api/config/default-model — 更新全局默认模型配置（作用于新会话）
@@ -451,14 +431,6 @@ app.put('/api/config/default-model', (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
-});
-
-// POST /api/activate/clear — 清除激活（恢复 default）
-app.post('/api/activate/clear', (req, res) => {
-  const config = readConfig();
-  delete config.agent;
-  writeConfig(config);
-  res.json({ ok: true, activeAgent: null });
 });
 
 // POST /api/agents — 创建新自定义 agent（支持全字段）

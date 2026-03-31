@@ -123,7 +123,7 @@ export default function GlobalSettings({ onClose }) {
             {legacyAgent && (
               <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 text-[11px] leading-relaxed">
                 检测到旧的 <code className="font-mono">agent = "{legacyAgent}"</code> 字段。
-                子代理配置不会直接切换当前主会话模型；主会话默认模型请以下面的 <code className="font-mono">model</code> 设置为准。
+                这个字段不会可靠切换当前主会话预设，建议手动删除它，主会话默认模型请以下面的 <code className="font-mono">model</code> 设置为准。
               </div>
             )}
 

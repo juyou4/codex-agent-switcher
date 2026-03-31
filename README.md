@@ -126,6 +126,7 @@ Windows 用户也可以直接手动创建 `.env`。
 
 - 主会话默认模型来自 `config.toml` 顶层的 `model`、`model_provider`、`model_reasoning_effort`
 - `~/.codex/agents/*.toml` 和项目级 `.codex/agents/*.toml` 主要用于子代理配置
+- 如果旧配置里存在 `agent = "worker"` 这类字段，建议删除；它不是可靠的主会话预设切换方式
 - 修改配置文件通常对新开的 Codex 会话生效，不保证立即热更新当前正在运行的会话
 - UI 会优先显示 `~/.codex` 这种 home-relative 路径，避免在截图里暴露本机用户名
 
