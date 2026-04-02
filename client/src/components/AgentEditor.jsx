@@ -115,7 +115,7 @@ function buildFormState(source = {}) {
 }
 
 function ImportPanel({ mode, setMode, importText, setImportText, importSourceLabel, importing, importContent, openFile }) {
-  const inputCls = 'w-full px-4 py-2.5 min-h-[40px] rounded-[var(--radius)] bg-[hsl(var(--muted))] border border-[hsl(var(--border))] text-[13px] text-[hsl(var(--foreground))] placeholder-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--accent))] focus:border-[hsl(var(--accent))] transition-colors'
+  const inputCls = 'copyable-text w-full px-4 py-2.5 min-h-[40px] rounded-[var(--radius)] bg-[hsl(var(--muted))] border border-[hsl(var(--border))] text-[13px] text-[hsl(var(--foreground))] placeholder-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--accent))] focus:border-[hsl(var(--accent))] transition-colors'
   const tabCls = (active) => `h-10 rounded-[var(--radius)] border text-[12px] font-bold tracking-wide transition-colors ${active ? 'border-[hsl(var(--accent))] bg-[hsl(var(--accent))] text-[hsl(var(--background))]' : 'border-[hsl(var(--border))] bg-[hsl(var(--muted))] text-[hsl(var(--foreground))] hover:border-[hsl(var(--accent))]'}`
   return (
     <div className="space-y-4 animate-apple-fade-in">
@@ -153,7 +153,7 @@ function ImportPanel({ mode, setMode, importText, setImportText, importSourceLab
 }
 
 function EditorFields({ form, onChange, addMcpServer, removeMcpServer, updateMcpServer, isEdit }) {
-  const inputCls = 'w-full px-4 py-2.5 min-h-[40px] rounded-[var(--radius)] bg-[hsl(var(--muted))] border border-[hsl(var(--border))] text-[13px] text-[hsl(var(--foreground))] placeholder-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--accent))] focus:border-[hsl(var(--accent))] transition-colors'
+  const inputCls = 'copyable-text w-full px-4 py-2.5 min-h-[40px] rounded-[var(--radius)] bg-[hsl(var(--muted))] border border-[hsl(var(--border))] text-[13px] text-[hsl(var(--foreground))] placeholder-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--accent))] focus:border-[hsl(var(--accent))] transition-colors'
   const labelCls = 'block text-[11px] font-bold text-[hsl(var(--muted-foreground))] mb-1.5 uppercase tracking-wide'
   return (
     <div className="space-y-5">

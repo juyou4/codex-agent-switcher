@@ -33,6 +33,8 @@ Codex Subagent Manager 的目标就是把这些操作变成一个本地页面，
 - 可视化展示内置子代理预设：`default`、`worker`、`explorer`
 - 创建、编辑、删除个人 agent：`~/.codex/agents/*.toml`
 - 支持加载项目级 agent：`<project>/.codex/agents/*.toml`
+- 支持管理全局与项目根目录的 `AGENTS.md` / `AGENTS.override.md`
+- 支持在项目范围内一键生成权限分级代理模板：`restricted-explorer`、`standard-worker`、`high-privilege`
 - 支持编辑常用字段：
   `model`、`model_provider`、`model_reasoning_effort`、`sandbox_mode`、`nickname_candidates`、`mcp_servers`
 - 支持 Streamable HTTP / stdio 两类常见 MCP server 配置
@@ -47,6 +49,8 @@ Codex Subagent Manager 的目标就是把这些操作变成一个本地页面，
 - 它不替代 Codex 会话内的 `/agent`
   `/agent` 仍然是查看和管理当前会话里运行中的子代理的方式
 - 它主要修改的是配置文件，而不是直接接管一个已经在运行的 Codex 进程
+- 它不会把 `AGENTS.md` 当成真实权限源
+  `AGENTS.md` 只负责自然语言编排和授权规则；真实权限仍来自 `.codex/agents/*.toml` 与 `config.toml`
 - 它管理的是“启用子代理时可选的预设和配置”
   不是把整个新会话本体切成 `default` / `worker` / `explorer`
 - 它可以和 Codex desktop app 一起使用
@@ -115,6 +119,8 @@ Windows 用户也可以直接手动创建 `.env`。
 ```text
 ~/.codex/
 ├── config.toml
+├── AGENTS.md
+├── AGENTS.override.md
 └── agents/
     ├── worker.toml
     └── my-agent.toml
@@ -126,10 +132,60 @@ Windows 用户也可以直接手动创建 `.env`。
 <project>/.codex/agents/
 ```
 
+项目根目录下的编排规则文件为：
+
+```text
+<project>/
+├── AGENTS.md
+└── AGENTS.override.md
+```
+
+## AGENTS Workflow
+
+### 全局规则
+
+- 通过顶部 Header 的 “AGENTS 规则” 入口管理：
+  - `~/.codex/AGENTS.md`
+  - `~/.codex/AGENTS.override.md`
+- 适合放通用的 subagent 编排规则、授权约束和默认工作方式
+
+### 项目规则
+
+- 在“项目范围”区域输入项目路径并加载
+- 加载后可打开项目级 AGENTS 编辑器，管理：
+  - `<project>/AGENTS.md`
+  - `<project>/AGENTS.override.md`
+- 编辑器会显示：
+  - 文件是否存在
+  - 文件大小与建议上限 `effectiveLimitBytes`
+  - `project_doc_fallback_filenames`
+  - 从项目根目录到当前目录的 AGENTS 文件覆盖链（只读浏览）
+
+### 权限分层推荐用法
+
+- 项目范围卡片支持一键生成 3 个权限分级模板代理：
+  - `restricted-explorer`
+  - `standard-worker`
+  - `high-privilege`
+- 推荐组合方式：
+  - 用 `.codex/agents/*.toml` 定义真实权限与 sandbox
+  - 用 `AGENTS.md` 约束主代理何时选择这些代理
+- AGENTS 模板默认采用“显式授权后才允许高权限”的策略
+
+### 生效方式
+
+- `AGENTS.md` / `AGENTS.override.md` 只负责自然语言编排策略
+- 真实权限仍来自 `.codex/agents/*.toml` 与 `config.toml`
+- 修改后通常对 **下一次新任务 / 新会话** 生效，不保证立即热更新当前会话
+
 ### Notes
 
 - 主会话默认模型来自 `config.toml` 顶层的 `model`、`model_provider`、`model_reasoning_effort`
 - `~/.codex/agents/*.toml` 和项目级 `.codex/agents/*.toml` 主要用于会话里启用子代理时的配置
+- `AGENTS.md` / `AGENTS.override.md` 只负责自然语言编排策略，不直接定义 `sandbox_mode`
+- 若要做权限分层，推荐组合使用：
+  项目或全局 `.codex/agents/*.toml` 定义真实权限，
+  `AGENTS.md` 约束主代理何时选择哪个 subagent
 - 如果旧配置里存在 `agent = "worker"` 这类字段，建议删除；它不是可靠的主会话预设切换方式。UI 里也提供了一键移除入口
 - 修改配置文件通常对新开的 Codex 会话生效，不保证立即热更新当前正在运行的会话
 - UI 会优先显示 `~/.codex` 这种 home-relative 路径，避免在截图里暴露本机用户名

@@ -96,18 +96,23 @@ export default function AgentCard({ agent, onEdit, onDelete, onReset, onApply, g
       {/* Instructions preview */}
       {agent.developer_instructions && (
         <div className="flex flex-col gap-[var(--space-sm)] mb-[var(--space-md)]">
-          <button
-            onClick={() => setExpanded(!expanded)}
-            className="flex items-center gap-[var(--space-xs)] text-[11px] font-bold text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors group/instr uppercase tracking-widest inline-flex w-fit"
-          >
-            <svg className={`w-3.5 h-3.5 transition-transform duration-500 ${expanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-            开发者指令
-          </button>
+          <div className="flex items-center justify-between gap-[var(--space-sm)]">
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className="flex items-center gap-[var(--space-xs)] text-[11px] font-bold text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors group/instr uppercase tracking-widest inline-flex w-fit"
+            >
+              <svg className={`w-3.5 h-3.5 transition-transform duration-500 ${expanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+              开发者指令
+            </button>
+            {expanded && (
+              <CopyButton text={agent.developer_instructions} label="复制指令" title="复制开发者指令" />
+            )}
+          </div>
           {expanded && (
             <div className="animate-apple-fade-in">
-              <div className="text-[12px] text-[hsl(var(--muted-foreground))] bg-[hsl(var(--background))/0.4] rounded-[var(--radius)] p-[var(--space-sm)] lg:p-[var(--space-md)] overflow-auto max-h-64 scrollbar-thin whitespace-pre-wrap font-mono leading-relaxed border border-[hsl(var(--border))] shadow-inner">
+              <div className="copyable-text text-[12px] text-[hsl(var(--muted-foreground))] bg-[hsl(var(--background))/0.4] rounded-[var(--radius)] p-[var(--space-sm)] lg:p-[var(--space-md)] overflow-auto max-h-64 scrollbar-thin whitespace-pre-wrap font-mono leading-relaxed border border-[hsl(var(--border))] shadow-inner">
                 {agent.developer_instructions}
               </div>
             </div>

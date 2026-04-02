@@ -3,6 +3,7 @@ import Header from './components/Header'
 import AgentCard from './components/AgentCard'
 import AgentEditor from './components/AgentEditor'
 import GlobalSettings from './components/GlobalSettings'
+import AgentsMdEditor from './components/AgentsMdEditor'
 
 function getAgentPresetId(agent) {
   if (agent?._scope === 'project') {
@@ -30,6 +31,10 @@ export default function App() {
   const [defaultModelSummary, setDefaultModelSummary] = useState('')
   const [globalConfig, setGlobalConfig] = useState({ model: '', model_provider: '', model_reasoning_effort: '' })
   const [appliedPresetId, setAppliedPresetId] = useState('')
+  const [agentsMdEditor, setAgentsMdEditor] = useState(null)
+  const [projectAgentsDocs, setProjectAgentsDocs] = useState(null)
+  const [projectAgentsDocsError, setProjectAgentsDocsError] = useState('')
+  const [generatingPermissionPack, setGeneratingPermissionPack] = useState(false)
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type })
@@ -42,10 +47,12 @@ export default function App() {
     try {
       const proj = projPath !== undefined ? projPath : projectPath
       const agentsUrl = proj ? `/api/agents?project=${encodeURIComponent(proj)}` : '/api/agents'
-      const [agentsRes, configRes, infoRes] = await Promise.all([
+      const docsUrl = proj ? `/api/agents-md?scope=project&project=${encodeURIComponent(proj)}` : null
+      const [agentsRes, configRes, infoRes, docsRes] = await Promise.all([
         fetch(agentsUrl),
         fetch('/api/config'),
         fetch('/api/info'),
+        docsUrl ? fetch(docsUrl) : Promise.resolve(null),
       ])
       const agentsData = await agentsRes.json()
       const configData = await configRes.json()
@@ -72,6 +79,19 @@ export default function App() {
       if (infoRes.ok) {
         const infoData = await infoRes.json()
         setCodexDir(infoData.codexDirDisplay || infoData.codexDir || '~/.codex')
+      }
+      if (docsRes) {
+        const docsData = await docsRes.json()
+        if (docsRes.ok) {
+          setProjectAgentsDocs(docsData)
+          setProjectAgentsDocsError('')
+        } else {
+          setProjectAgentsDocs(null)
+          setProjectAgentsDocsError(docsData.error || 'AGENTS.md 信息加载失败')
+        }
+      } else {
+        setProjectAgentsDocs(null)
+        setProjectAgentsDocsError('')
       }
     } catch {
       setError('无法连接到后端服务，请确认 server.js 正在运行（默认 :3737）')
@@ -168,6 +188,37 @@ export default function App() {
     fetchAll(p)
   }
 
+  const handleAgentsMdSaved = async (message) => {
+    await fetchAll(projectPath || undefined, true)
+    showToast(message || 'AGENTS 文件已保存')
+  }
+
+  const handleGeneratePermissionPack = async () => {
+    if (!projectPath) return
+    const overwrite = confirm('如果存在同名代理，是否覆盖现有文件？\n\n选择“确定”会覆盖同名模板代理；选择“取消”则只补齐缺失文件。')
+    setGeneratingPermissionPack(true)
+    try {
+      const res = await fetch(`/api/agents/permission-pack?project=${encodeURIComponent(projectPath)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ overwrite }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || '生成权限代理失败')
+      await fetchAll(projectPath, true)
+      const message = [
+        data.created?.length ? `新建 ${data.created.length} 个` : '',
+        data.overwritten?.length ? `覆盖 ${data.overwritten.length} 个` : '',
+        data.skipped?.length ? `跳过 ${data.skipped.length} 个` : '',
+      ].filter(Boolean).join('，')
+      showToast(message ? `权限代理模板已处理：${message}` : '权限代理模板已处理')
+    } catch (err) {
+      showToast(err.message, 'error')
+    } finally {
+      setGeneratingPermissionPack(false)
+    }
+  }
+
   const cardProps = (agent) => ({
     agent,
     globalConfig,
@@ -213,6 +264,7 @@ export default function App() {
         onRefresh={() => fetchAll()}
         loading={loading}
         onSettings={() => setSettingsOpen(true)}
+        onAgentsGuide={() => setAgentsMdEditor({ scope: 'global', projectDir: '' })}
         codexDir={codexDir}
       />
 
@@ -333,6 +385,51 @@ export default function App() {
               </div>
             </div>
 
+            {projectPath && (
+              <div className="mb-[var(--space-xl)] animate-apple-fade-in">
+                <div className="glass-card p-[var(--space-lg)] bg-apple-section-secondary border border-[hsl(var(--border))] shadow-none">
+                  <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                    <div className="space-y-2">
+                      <div>
+                        <p className="text-apple-title text-[hsl(var(--foreground))]">AGENTS 策略</p>
+                        <p className="text-apple-caption mt-1">
+                          管理项目根目录的 `AGENTS.md` 与 `AGENTS.override.md`，用于定义 subagent 编排规则和授权约束。
+                        </p>
+                      </div>
+                      <div className="text-[12px] text-[hsl(var(--muted-foreground))] space-y-1">
+                        <p>真实权限仍来自 `.codex/agents/*.toml` 与 `config.toml`，AGENTS.md 只负责自然语言编排策略。</p>
+                        {projectAgentsDocs ? (
+                          <>
+                            <p>AGENTS.md：{projectAgentsDocs.base?.exists ? `已创建 · ${projectAgentsDocs.base.sizeBytes} bytes · ${projectAgentsDocs.base.modifiedAt ? new Date(projectAgentsDocs.base.modifiedAt).toLocaleString() : '未记录时间'}` : '未创建'}</p>
+                            <p>AGENTS.override.md：{projectAgentsDocs.override?.exists ? `已创建 · ${projectAgentsDocs.override.sizeBytes} bytes · ${projectAgentsDocs.override.modifiedAt ? new Date(projectAgentsDocs.override.modifiedAt).toLocaleString() : '未记录时间'}` : '未创建'}</p>
+                            <p>建议大小上限：{projectAgentsDocs.effectiveLimitBytes} bytes</p>
+                            <p>Fallback filenames：{projectAgentsDocs.fallbackFilenames?.length > 0 ? projectAgentsDocs.fallbackFilenames.join(', ') : '未配置'}</p>
+                          </>
+                        ) : (
+                          <p>{projectAgentsDocsError || '尚未加载 AGENTS 文件信息'}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <button
+                        onClick={handleGeneratePermissionPack}
+                        disabled={generatingPermissionPack}
+                        className="glass-button whitespace-nowrap h-10 px-4 disabled:opacity-50"
+                      >
+                        {generatingPermissionPack ? '生成中…' : '生成权限代理'}
+                      </button>
+                      <button
+                        onClick={() => setAgentsMdEditor({ scope: 'project', projectDir: projectPath })}
+                        className="glass-button-primary whitespace-nowrap h-10 px-4"
+                      >
+                        编辑 AGENTS
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {projectPath && !loading && projectAgents.length === 0 && (
               <div className="p-12 rounded-[var(--radius-lg)] border border-dashed border-[hsl(var(--border))] bg-apple-section-secondary text-center animate-apple-fade-in shadow-none">
                 <p className="text-apple-body text-[hsl(var(--muted-foreground))]">
@@ -391,6 +488,17 @@ export default function App() {
 
       {editorOpen && (
         <AgentEditor agent={editingAgent} onSave={handleEditorSave} onClose={() => { setEditorOpen(false); setEditingAgent(null) }} codexDir={codexDir} />
+      )}
+
+      {agentsMdEditor && (
+        <AgentsMdEditor
+          scope={agentsMdEditor.scope}
+          projectDir={agentsMdEditor.projectDir}
+          globalCustomAgents={customAgents}
+          projectAgents={projectAgents}
+          onClose={() => setAgentsMdEditor(null)}
+          onSaved={handleAgentsMdSaved}
+        />
       )}
 
       {settingsOpen && <GlobalSettings onClose={() => setSettingsOpen(false)} onSaved={() => fetchAll(undefined, true)} />}

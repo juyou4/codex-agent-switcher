@@ -18,6 +18,46 @@ const CODEX_DIR = process.env.CODEX_DIR
 const CONFIG_FILE = path.join(CODEX_DIR, 'config.toml');
 const AGENTS_DIR = path.join(CODEX_DIR, 'agents');
 const APP_STATE_FILE = path.join(CODEX_DIR, 'codex-subagent-manager-state.json');
+const DEFAULT_PROJECT_DOC_MAX_BYTES = 32768;
+const AGENTS_DOC_FILES = {
+  base: 'AGENTS.md',
+  override: 'AGENTS.override.md',
+};
+const PERMISSION_PACK_AGENTS = [
+  {
+    name: 'restricted-explorer',
+    description: '只读探索代理，用于代码分析、审查、检索与信息收集。',
+    developer_instructions: `你是只读探索代理。
+
+核心约束：
+- 仅执行阅读、分析、检索、审查和定位问题。
+- 禁止修改任何文件，禁止执行会写入工作区的命令。
+- 输出保持精炼，只返回主代理继续决策所需的信息。`,
+    sandbox_mode: 'read-only',
+  },
+  {
+    name: 'standard-worker',
+    description: '标准执行代理，用于在工作区内进行受控修改。',
+    developer_instructions: `你是标准执行代理。
+
+核心约束：
+- 仅在任务明确要求修改工作区时执行写操作。
+- 修改范围保持最小化，不处理无关重构。
+- 执行前后都要总结将修改或已修改的文件与命令。`,
+    sandbox_mode: 'workspace-write',
+  },
+  {
+    name: 'high-privilege',
+    description: '高权限代理，仅在用户明确授权时使用。',
+    developer_instructions: `你是高权限代理。
+
+核心约束：
+- 只有在用户明确授权高权限操作时才可执行。
+- 每次执行前必须先总结：代理名称、sandbox_mode、计划修改的文件、计划执行的命令。
+- 若用户授权不明确，必须停止并要求主代理确认。`,
+    sandbox_mode: 'danger-full-access',
+  },
+];
 
 app.use(cors());
 app.use(express.json());
@@ -260,6 +300,177 @@ function tryParseTomlFile(filePath, fallback = null) {
 function listTomlFiles(dir) {
   if (!fs.existsSync(dir)) return [];
   return fs.readdirSync(dir).filter((file) => file.endsWith('.toml'));
+}
+
+function normalizePositiveInteger(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const normalized = Number(value);
+  if (!Number.isFinite(normalized) || normalized <= 0) return null;
+  return Math.floor(normalized);
+}
+
+function normalizeStringList(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => toTrimmedStringOrNull(item))
+      .filter(Boolean);
+  }
+  const singleValue = toTrimmedStringOrNull(value);
+  return singleValue ? [singleValue] : [];
+}
+
+function getConfigFileData(filePath) {
+  if (!fs.existsSync(filePath)) return {};
+  return tryParseTomlFile(filePath, {}) || {};
+}
+
+function resolveProjectRoot(projectDir) {
+  const normalizedPath = toTrimmedStringOrNull(projectDir);
+  if (!normalizedPath) {
+    throw new Error('project is required');
+  }
+  if (!path.isAbsolute(normalizedPath)) {
+    throw new Error('project must be an absolute path');
+  }
+
+  const resolvedProjectDir = path.resolve(normalizedPath);
+  if (!fs.existsSync(resolvedProjectDir)) {
+    throw new Error(`project "${resolvedProjectDir}" does not exist`);
+  }
+  if (!fs.statSync(resolvedProjectDir).isDirectory()) {
+    throw new Error(`project "${resolvedProjectDir}" is not a directory`);
+  }
+
+  return resolvedProjectDir;
+}
+
+function getProjectConfigFile(projectDir) {
+  return path.join(projectDir, '.codex', 'config.toml');
+}
+
+function getProjectAgentsDir(projectDir) {
+  return path.join(resolveProjectRoot(projectDir), '.codex', 'agents');
+}
+
+function ensureProjectAgentsDir(projectDir) {
+  const agentsDir = getProjectAgentsDir(projectDir);
+  if (!fs.existsSync(agentsDir)) {
+    fs.mkdirSync(agentsDir, { recursive: true });
+  }
+  return agentsDir;
+}
+
+function getAgentsMdFilePath({ scope, kind, projectDir = null }) {
+  const filename = AGENTS_DOC_FILES[kind];
+  if (!filename) {
+    throw new Error('kind must be "base" or "override"');
+  }
+
+  if (scope === 'global') {
+    return path.join(CODEX_DIR, filename);
+  }
+  if (scope === 'project') {
+    return path.join(projectDir, filename);
+  }
+
+  throw new Error('scope must be "global" or "project"');
+}
+
+function getAgentsMdFileInfo(filePath) {
+  if (!fs.existsSync(filePath)) {
+    return {
+      path: filePath,
+      displayPath: toDisplayPath(filePath),
+      exists: false,
+      content: '',
+      sizeBytes: 0,
+      modifiedAt: null,
+    };
+  }
+
+  const stat = fs.statSync(filePath);
+  return {
+    path: filePath,
+    displayPath: toDisplayPath(filePath),
+    exists: true,
+    content: readTextFile(filePath),
+    sizeBytes: stat.size,
+    modifiedAt: stat.mtime.toISOString(),
+  };
+}
+
+function getAgentsMdSupportConfig(projectDir = null) {
+  const globalConfig = readConfig();
+  const projectConfig = projectDir ? getConfigFileData(getProjectConfigFile(projectDir)) : {};
+  const projectFallbackFilenames = normalizeStringList(projectConfig.project_doc_fallback_filenames);
+  const globalFallbackFilenames = normalizeStringList(globalConfig.project_doc_fallback_filenames);
+
+  return {
+    effectiveLimitBytes:
+      normalizePositiveInteger(projectConfig.project_doc_max_bytes)
+      ?? normalizePositiveInteger(globalConfig.project_doc_max_bytes)
+      ?? DEFAULT_PROJECT_DOC_MAX_BYTES,
+    fallbackFilenames: projectFallbackFilenames.length > 0 ? projectFallbackFilenames : globalFallbackFilenames,
+  };
+}
+
+function getAgentsMdScopeContext(query = {}) {
+  const scope = toTrimmedStringOrNull(query.scope) || 'global';
+  if (scope !== 'global' && scope !== 'project') {
+    throw new Error('scope must be "global" or "project"');
+  }
+
+  return {
+    scope,
+    projectDir: scope === 'project' ? resolveProjectRoot(query.project) : null,
+  };
+}
+
+function getRelativePathFromProjectRoot(projectDir, targetDir) {
+  const relativePath = path.relative(projectDir, targetDir);
+  return relativePath ? relativePath.replace(/\\/g, '/') : '.';
+}
+
+function resolveProjectSubdirectory(projectDir, cwdDir = null) {
+  const resolvedProjectDir = resolveProjectRoot(projectDir);
+  if (!cwdDir) return resolvedProjectDir;
+
+  const normalizedCwd = toTrimmedStringOrNull(cwdDir);
+  if (!normalizedCwd) return resolvedProjectDir;
+  if (!path.isAbsolute(normalizedCwd)) {
+    throw new Error('cwd must be an absolute path');
+  }
+
+  const resolvedCwd = path.resolve(normalizedCwd);
+  const relativePath = path.relative(resolvedProjectDir, resolvedCwd);
+  const isOutsideProject = relativePath.startsWith('..') || path.isAbsolute(relativePath);
+  if (isOutsideProject) {
+    throw new Error('cwd must stay within project');
+  }
+  if (!fs.existsSync(resolvedCwd) || !fs.statSync(resolvedCwd).isDirectory()) {
+    throw new Error(`cwd "${resolvedCwd}" is not a directory`);
+  }
+
+  return resolvedCwd;
+}
+
+function getProjectAgentsMdChain(projectDir, cwdDir = null) {
+  const resolvedProjectDir = resolveProjectRoot(projectDir);
+  const resolvedCwd = resolveProjectSubdirectory(resolvedProjectDir, cwdDir);
+  const segments = [];
+  let cursor = resolvedCwd;
+  while (true) {
+    segments.unshift(cursor);
+    if (cursor === resolvedProjectDir) break;
+    cursor = path.dirname(cursor);
+  }
+
+  return segments.map((dirPath) => ({
+    dir: dirPath,
+    relativeDir: getRelativePathFromProjectRoot(resolvedProjectDir, dirPath),
+    base: getAgentsMdFileInfo(path.join(dirPath, AGENTS_DOC_FILES.base)),
+    override: getAgentsMdFileInfo(path.join(dirPath, AGENTS_DOC_FILES.override)),
+  }));
 }
 
 function extractImportCandidates(rawContent) {
@@ -531,8 +742,8 @@ function loadCustomAgents() {
 }
 
 function loadProjectAgents(projectDir) {
-  const resolvedProjectDir = path.resolve(projectDir);
-  const dir = path.join(resolvedProjectDir, '.codex', 'agents');
+  const resolvedProjectDir = resolveProjectRoot(projectDir);
+  const dir = getProjectAgentsDir(resolvedProjectDir);
   const agents = [];
   if (!fs.existsSync(dir)) return agents;
   for (const file of listTomlFiles(dir)) {
@@ -761,6 +972,44 @@ app.post('/api/agents', (req, res) => {
   res.json({ ok: true, file: filename });
 });
 
+// POST /api/agents/permission-pack — 生成项目级权限分级代理模板
+app.post('/api/agents/permission-pack', (req, res) => {
+  try {
+    const projectDir = resolveProjectRoot(req.query.project);
+    const overwrite = !!req.body?.overwrite;
+    const agentsDir = ensureProjectAgentsDir(projectDir);
+    const result = { created: [], overwritten: [], skipped: [] };
+
+    for (const agentTemplate of PERMISSION_PACK_AGENTS) {
+      const existingFile = findAgentFileByName(agentsDir, agentTemplate.name);
+      const targetFile = existingFile || `${agentTemplate.name.replace(/[^a-z0-9_-]/gi, '-')}.toml`;
+      const targetPath = path.join(agentsDir, targetFile);
+
+      if (existingFile && !overwrite) {
+        result.skipped.push(agentTemplate.name);
+        continue;
+      }
+
+      fs.writeFileSync(targetPath, TOML.stringify(agentTemplate), 'utf8');
+      if (existingFile) {
+        result.overwritten.push(agentTemplate.name);
+      } else {
+        result.created.push(agentTemplate.name);
+      }
+    }
+
+    res.json({
+      ok: true,
+      overwrite,
+      projectDir,
+      ...result,
+      agents: loadProjectAgents(projectDir),
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // PUT /api/agents/:name — 更新 agent（若文件不存在则新建，用于内置 agent 首次覆盖；支持全字段）
 app.put('/api/agents/:name', (req, res) => {
   const { name } = req.params;
@@ -869,6 +1118,74 @@ app.get('/api/info', (req, res) => {
     port: PORT,
     platform: process.platform,
   });
+});
+
+// GET /api/agents-md — 返回全局或项目级 AGENTS.md / AGENTS.override.md
+app.get('/api/agents-md', (req, res) => {
+  try {
+    const { scope, projectDir } = getAgentsMdScopeContext(req.query);
+    const supportConfig = getAgentsMdSupportConfig(projectDir);
+    const currentCwd = scope === 'project' ? resolveProjectSubdirectory(projectDir, req.query.cwd) : null;
+
+    res.json({
+      scope,
+      projectDir,
+      currentCwd,
+      base: getAgentsMdFileInfo(getAgentsMdFilePath({ scope, kind: 'base', projectDir })),
+      override: getAgentsMdFileInfo(getAgentsMdFilePath({ scope, kind: 'override', projectDir })),
+      effectiveLimitBytes: supportConfig.effectiveLimitBytes,
+      fallbackFilenames: supportConfig.fallbackFilenames,
+      chain: scope === 'project' ? getProjectAgentsMdChain(projectDir, currentCwd) : [],
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// PUT /api/agents-md — 保存 AGENTS.md / AGENTS.override.md
+app.put('/api/agents-md', (req, res) => {
+  try {
+    const { scope, projectDir } = getAgentsMdScopeContext(req.query);
+    const kind = req.body?.kind;
+    const content = typeof req.body?.content === 'string' ? req.body.content : '';
+    const filePath = getAgentsMdFilePath({ scope, kind, projectDir });
+
+    if (!content.trim()) {
+      return res.status(400).json({ error: 'content is required' });
+    }
+
+    fs.writeFileSync(filePath, content, 'utf8');
+    res.json({
+      ok: true,
+      kind,
+      doc: getAgentsMdFileInfo(filePath),
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// DELETE /api/agents-md — 删除 AGENTS.md / AGENTS.override.md
+app.delete('/api/agents-md', (req, res) => {
+  try {
+    const { scope, projectDir } = getAgentsMdScopeContext(req.query);
+    const kind = req.query.kind;
+    const filePath = getAgentsMdFilePath({ scope, kind, projectDir });
+    const existed = fs.existsSync(filePath);
+
+    if (existed) {
+      fs.unlinkSync(filePath);
+    }
+
+    res.json({
+      ok: true,
+      kind,
+      deleted: existed,
+      doc: getAgentsMdFileInfo(filePath),
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 // SPA fallback — 生产模式下所有未匹配路由返回 index.html

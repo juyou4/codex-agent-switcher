@@ -277,3 +277,8 @@
   background: hsl(var(--muted-foreground)/0.4); 
 }
 
+.copyable-text,
+.copyable-text * {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+}
